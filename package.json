@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "web": "node server.js",
-    "desktop": "python desktop/talkity_desktop.py"
+    "desktop": "python desktop/talkity_desktop.py",
+    "test": "node test.js",
+    "test:desktop": "py desktop/test_protocol.py"
   },
   "keywords": ["voice", "dictation", "whisper", "speech-to-text", "ai", "transcription"],
   "author": "Talkity Team",

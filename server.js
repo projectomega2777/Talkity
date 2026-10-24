@@ -37,12 +37,13 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data:",
+      "img-src 'self' data: https://*.google.com https://*.googleusercontent.com https://*.googlesyndication.com",
       "media-src 'self' blob:",
-      "connect-src 'self' https://api.groq.com https://api.openai.com wss: ws:",
+      "connect-src 'self' https://api.groq.com https://api.openai.com wss: ws: https://pagead2.googlesyndication.com https://*.google.com https://*.googlesyndication.com",
+      "frame-src 'self' https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com",
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'none'"
@@ -213,8 +214,12 @@ function saveSettings(settings) {
 }
 
 // WebSocket setup (Local standalone only)
-const clients = new Set();
+const clients = new Map(); // Map<WebSocket, clientMetadata>
 let desktopClient = null;
+
+// Heartbeat monitoring configuration
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const HEARTBEAT_TIMEOUT = 35000; // 35 seconds (give 5s grace period)
 
 if (!IS_VERCEL) {
   try {
@@ -222,42 +227,168 @@ if (!IS_VERCEL) {
     const wss = new WebSocketServer({ server });
 
     wss.on('connection', (ws) => {
-      clients.add(ws);
-      ws.send(JSON.stringify({ type: 'connected', message: 'Talkity WebSocket connected' }));
+      const clientMeta = {
+        id: `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        connectedAt: new Date().toISOString(),
+        lastHeartbeat: Date.now(),
+        isDesktop: false,
+        isAlive: true
+      };
+
+      clients.set(ws, clientMeta);
+      console.log(`[WebSocket] Client connected: ${clientMeta.id}`);
+
+      ws.send(JSON.stringify({
+        type: 'connected',
+        message: 'Talkity WebSocket connected',
+        clientId: clientMeta.id,
+        serverTime: new Date().toISOString()
+      }));
+
+      // Heartbeat ping
+      ws.isAlive = true;
+      ws.on('pong', () => {
+        ws.isAlive = true;
+        if (clients.has(ws)) {
+          clients.get(ws).lastHeartbeat = Date.now();
+        }
+      });
 
       ws.on('message', (msg) => {
         try {
           if (typeof msg !== 'string' && !Buffer.isBuffer(msg)) return;
           const data = JSON.parse(msg.toString());
+
+          // Handle client heartbeat
+          if (data.type === 'heartbeat') {
+            if (clients.has(ws)) {
+              clients.get(ws).lastHeartbeat = Date.now();
+            }
+            ws.send(JSON.stringify({ type: 'heartbeat_ack', timestamp: Date.now() }));
+            return;
+          }
+
+          // Handle heartbeat acknowledgment
+          if (data.type === 'heartbeat_ack') {
+            if (clients.has(ws)) {
+              clients.get(ws).lastHeartbeat = Date.now();
+              clients.get(ws).isAlive = true;
+            }
+            return;
+          }
+
+          // Desktop client registration
           if (data.type === 'register_desktop') {
             desktopClient = ws;
-            broadcast({ type: 'desktop_status', connected: true });
+            if (clients.has(ws)) {
+              clients.get(ws).isDesktop = true;
+              clients.get(ws).clientId = data.clientId || clientMeta.id;
+            }
+            console.log(`[WebSocket] Desktop client registered: ${data.clientId}`);
+            broadcast({ type: 'desktop_status', connected: true, clientId: data.clientId });
+            return;
           }
-          for (const client of clients) {
+
+          // Broadcast to other clients
+          for (const [client, meta] of clients.entries()) {
             if (client !== ws && client.readyState === 1) {
               client.send(JSON.stringify(data));
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.error('[WebSocket] Message error:', e.message);
+        }
       });
 
       ws.on('close', () => {
+        const meta = clients.get(ws);
         clients.delete(ws);
+
+        if (meta) {
+          console.log(`[WebSocket] Client disconnected: ${meta.id} (was desktop: ${meta.isDesktop})`);
+        }
+
         if (desktopClient === ws) {
           desktopClient = null;
           broadcast({ type: 'desktop_status', connected: false });
+          console.log('[WebSocket] Desktop client disconnected');
         }
       });
+
+      ws.on('error', (error) => {
+        console.error('[WebSocket] Client error:', error.message);
+      });
     });
-  } catch (e) {}
+
+    // Heartbeat monitoring: ping all clients periodically
+    const heartbeatInterval = setInterval(() => {
+      for (const [ws, meta] of clients.entries()) {
+        if (ws.isAlive === false) {
+          console.log(`[WebSocket] Terminating dead connection: ${meta.id}`);
+          clients.delete(ws);
+          if (desktopClient === ws) {
+            desktopClient = null;
+            broadcast({ type: 'desktop_status', connected: false });
+          }
+          return ws.terminate();
+        }
+
+        ws.isAlive = false;
+        ws.ping();
+
+        // Also send JSON heartbeat for compatibility with custom clients
+        try {
+          ws.send(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
+        } catch (e) {}
+      }
+    }, HEARTBEAT_INTERVAL);
+
+    wss.on('close', () => {
+      clearInterval(heartbeatInterval);
+    });
+
+    console.log('[WebSocket] Server initialized with heartbeat monitoring');
+  } catch (e) {
+    console.error('[WebSocket] Initialization error:', e.message);
+  }
 }
 
 function broadcast(event) {
-  for (const client of clients) {
+  const payload = JSON.stringify(event);
+  let sent = 0;
+  for (const [client, meta] of clients.entries()) {
     if (client.readyState === 1) {
-      client.send(JSON.stringify(event));
+      try {
+        client.send(payload);
+        sent++;
+      } catch (e) {
+        console.error(`[WebSocket] Broadcast error to ${meta.id}:`, e.message);
+      }
     }
   }
+  if (sent > 0) {
+    console.log(`[WebSocket] Broadcast to ${sent} client(s): ${event.type}`);
+  }
+}
+
+function getWebSocketStats() {
+  const stats = {
+    totalClients: clients.size,
+    desktopConnected: desktopClient !== null,
+    clients: []
+  };
+
+  for (const [ws, meta] of clients.entries()) {
+    stats.clients.push({
+      id: meta.id,
+      isDesktop: meta.isDesktop,
+      connectedAt: meta.connectedAt,
+      lastHeartbeat: new Date(meta.lastHeartbeat).toISOString(),
+      isAlive: ws.isAlive !== false
+    });
+  }
+
+  return stats;
 }
 
 // Safe Contextual Polisher (Protected against ReDoS)
@@ -598,6 +729,16 @@ api.post('/inject', (req, res) => {
   const safeText = text.slice(0, 5000);
   broadcast({ type: 'inject_text', text: safeText });
   res.json({ success: true, message: 'Injection dispatched to desktop daemon' });
+});
+
+// GET /ws-status (WebSocket connection status)
+api.get('/ws-status', (req, res) => {
+  const stats = getWebSocketStats();
+  res.json({
+    ...stats,
+    serverUptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Mount router on both /api and root

@@ -143,15 +143,21 @@
     } catch {}
   }
 
-  // WebSocket Connection
+  // WebSocket Connection (Phase 2: Enhanced Reconnection)
   function initWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
+    if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) {
+      return; // Already connected or connecting
+    }
+
     try {
       state.ws = new WebSocket(wsUrl);
+      state.reconnectDelay = state.reconnectDelay || 1000;
 
       state.ws.onopen = () => {
+        state.reconnectDelay = 1000; // Reset backoff on successful connect
         daemonStatus.querySelector('.status-dot').style.background = '#10b981';
         daemonStatus.querySelector('.status-label').textContent = 'Desktop Bridge Connected';
       };
@@ -159,21 +165,42 @@
       state.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data.type === 'heartbeat') {
+            // Respond with acknowledgment
+            state.ws.send(JSON.stringify({ type: 'heartbeat_ack', clientId: state.clientId || 'web-client' }));
+            return;
+          }
+          if (data.type === 'heartbeat_ack') {
+            // Server heartbeat confirmed
+            return;
+          }
           if (data.type === 'remote_dictation_toggle') {
             toggleRecording();
           } else if (data.type === 'history_update') {
             fetchHistory();
           } else if (data.type === 'history_cleared') {
             renderHistoryTable([]);
+          } else if (data.type === 'desktop_status') {
+            const label = daemonStatus.querySelector('.status-label');
+            if (label) {
+              label.textContent = data.connected ? 'Desktop Bridge Active' : 'Desktop Bridge Disconnected';
+            }
           }
         } catch {}
+      };
+
+      state.ws.onerror = (err) => {
+        console.warn('[WebSocket] Error:', err);
       };
 
       state.ws.onclose = () => {
         daemonStatus.querySelector('.status-dot').style.background = '#f59e0b';
         daemonStatus.querySelector('.status-label').textContent = 'Web Engine Ready';
+
+        // Exponential backoff reconnection (max 30s)
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-          setTimeout(initWebSocket, 4000);
+          setTimeout(initWebSocket, Math.min(state.reconnectDelay, 30000));
+          state.reconnectDelay = Math.min(state.reconnectDelay * 1.5, 30000);
         }
       };
     } catch {

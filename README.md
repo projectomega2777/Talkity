@@ -107,8 +107,9 @@ talkity/
 ├── api/
 │   └── index.js           # Vercel serverless function entrypoint
 ├── desktop/
-│   ├── TalkityApp.cs      # C# source code for Windows HUD overlay
-│   └── talkity_desktop.py # Python alternative desktop client
+│   ├── TalkityApp.cs                      # C# source code for Windows HUD overlay
+│   ├── talkity_desktop.py                 # Original Python desktop client
+│   └── talkity_desktop_enhanced.py        # Enhanced client with WebSocket protocol v1.0.0
 ├── public/
 │   ├── index.html         # Web application UI
 │   ├── app.js             # Client speech engine & XSS-safe UI controller
