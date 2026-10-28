@@ -1,4 +1,5 @@
 // Talkity Chrome Extension - Popup Logic
+// Minimal UI: status + Start Recording button + transcript.
 
 document.addEventListener('DOMContentLoaded', () => {
   const recordBtn = document.getElementById('recordBtn');
@@ -6,25 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
   const transcriptBox = document.getElementById('transcriptBox');
-  const serverUrlInput = document.getElementById('serverUrlInput');
 
   let isRecording = false;
   let recognition = null;
 
-  // Load saved server URL
-  chrome.storage.local.get(['serverUrl'], (res) => {
-    if (res.serverUrl) {
-      serverUrlInput.value = res.serverUrl;
-    }
-  });
-
-  serverUrlInput.addEventListener('change', () => {
-    const url = serverUrlInput.value.trim();
-    chrome.storage.local.set({ serverUrl: url }, () => {
-      // Reconnect background
-      chrome.runtime.reload();
-    });
-  });
+  // Production default is locked to Render backend; no user config.
+  const PRODUCTION_WS_URL = 'wss://talkity-qifh.onrender.com/';
 
   // Check connection status periodically
   function updateConnectionStatus() {
@@ -64,11 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (final) {
         transcriptBox.textContent = final;
-        // Send to background to relay to server and inject
+        // Relay transcription to background + content script
         chrome.runtime.sendMessage({
           action: 'send_transcription',
           text: final,
           tone: 'clean'
+        }, (bgRes) => {
+          if (!bgRes || !bgRes.success) {
+            console.warn('[Talkity Popup] Background relay failed:', bgRes?.error);
+          }
         });
 
         // Also inject directly into active tab content script as a reliable fallback
@@ -77,6 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.tabs.sendMessage(tabs[0].id, {
               action: 'talkity_inject',
               text: final
+            }, (csRes) => {
+              if (chrome.runtime.lastError) {
+                console.warn('[Talkity Popup] Content script injection failed:', chrome.runtime.lastError.message);
+              }
             });
           }
         });
@@ -91,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     recognition.onend = () => {
       if (isRecording) {
-        try { recognition.start(); } catch {}
+        try { recognition.start(); } catch (_) {}
       }
     };
   }
@@ -104,14 +100,14 @@ document.addEventListener('DOMContentLoaded', () => {
     isRecording = true;
     recordBtn.classList.add('recording');
     recordBtnText.textContent = 'Stop Recording';
-    try { recognition.start(); } catch {}
+    try { recognition.start(); } catch (_) {}
   }
 
   function stopRecording() {
     isRecording = false;
     recordBtn.classList.remove('recording');
     recordBtnText.textContent = 'Start Recording';
-    try { recognition.stop(); } catch {}
+    try { recognition.stop(); } catch (_) {}
   }
 
   recordBtn.addEventListener('click', () => {

@@ -1,0 +1,14 @@
+[
+  { "id": 1, "reference": "The quick brown fox jumps over the lazy dog." },
+  { "id": 2, "reference": "Hello world, how are you today?" },
+  { "id": 3, "reference": "Please dictate this sentence accurately." },
+  { "id": 4, "reference": "Talkity connects to the server for processing." },
+  { "id": 5, "reference": "Piyush is testing Antigravity and UI Automation with Talkity." },
+  { "id": 5, "reference": "Piyush is testing Antigravity and UI Automation with Talkity.", "duplicate": true },
+  { "id": 6, "reference": "This sentence has numbers: one two three four five.", "exclude": true, "note": "Output was 'This sentence has number 1, 2, 4, 5.' with digit three absent. Cannot distinguish a Whisper deletion from the speaker saying '1, 2, 4, 5', so this sample is reported but not aggregated." },
+  { "id": 7, "reference": "Um, I think, you know, we should ship this today." },
+  { "id": 8, "reference": "I am testing Whisper Large V3 with a known reference text." },
+  { "id": 9, "reference": "Thanks, let's meet at 3:30 p.m. in Room 204." },
+  { "id": 10, "reference": "Schedule a meeting with Piyush tomorrow at 3:30 p.m. in Room 204." },
+  { "id": 11, "reference": "Hello Talkity, this is a test of Talkity. I am checking whether my voice is converted into accurate text and insert automatically." }
+]

@@ -11,7 +11,8 @@
   ],
   "host_permissions": [
     "http://localhost/*",
-    "https://*.vercel.app/*"
+    "https://*.vercel.app/*",
+    "https://talkity-qifh.onrender.com/*"
   ],
   "action": {
     "default_popup": "src/popup.html",

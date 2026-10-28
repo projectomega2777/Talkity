@@ -4,3 +4,16 @@ node_modules/
 .DS_Store
 Thumbs.db
 data/history.json
+
+# Build artifacts (recreated by build_app.bat / build_tests.bat)
+Talkity.exe
+TalkityTests.exe
+csc_*.txt
+test_out.txt
+test_err.txt
+test_silence.wav
+desktop/__pycache__/
+
+# Installer build output (recreated by installer/build_installer.bat)
+release/output/
+*.msi

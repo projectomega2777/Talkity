@@ -1,0 +1,6 @@
+[
+  { "id": "R4", "reference": "Talkity connects to the server for processing." },
+  { "id": "R5", "reference": "Piyush is testing Antigravity and UI Automation with Talkity." },
+  { "id": "R7", "reference": "Um, I think, you know, we should ship this today." },
+  { "id": "R12", "reference": "Aaj main office ja raha hoon, meeting 3:30 p.m. par hai.", "exclude": true, "note": "Hindi-English mixed speech. Auto-detect returned Devanagari script, so there is no agreed reference form to score against. Reported qualitatively." }
+]

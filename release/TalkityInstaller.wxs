@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <!-- Talkity Desktop Installer — WiX v3 -->
+  <!-- This file defines a per-user, per-machine-capable MSI. -->
+
+  <Product Id="*" Name="Talkity" Language="1033" Version="1.0.0.0" Manufacturer="Talkity" UpgradeCode="A0B1C2D3-E4F5-6789-ABCD-EF0123456789">
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <Media Id="1" Cabinet="talkity.cab" EmbedCab="yes" />
+
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <Property Id="WIXUI_MODIFYFX" Value="1" />
+
+    <UIRef Id="WixUI_InstallDir" />
+
+    <Feature Id="Complete" Title="Talkity" Level="1">
+      <ComponentRef Id="TalkityExeComponent" />
+      <ComponentRef Id="TalkityShortcutComponent" />
+      <ComponentRef Id="TalkityDesktopShortcutComponent" />
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="Talkity" />
+      </Directory>
+      <Directory Id="DesktopFolder" />
+    </Directory>
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="TalkityExeComponent" Guid="B1C3D5E7-F9A1-2345-BCDE-F67890123456" KeyPath="yes">
+        <File Id="TalkityExe" Source="$(var.ReleaseDir)\Talkity.exe" KeyPath="yes" />
+      </Component>
+
+      <Component Id="TalkityShortcutComponent" Guid="C2D4E6F8-A1B2-3456-CDEF-0123456789AB">
+        <Shortcut Id="StartMenuShortcut" Directory="StartMenuFolder" Name="Talkity" Description="AI Voice Dictation" Target="[#TalkityExe]" WorkingDirectory="INSTALLFOLDER" />
+        <Icon Id="AppIcon" SourceFile="release\Talkity.ico" />
+      </Component>
+
+      <Component Id="TalkityDesktopShortcutComponent" Guid="D3E5F7A9-B2C3-4567-DEF0-1234567890BC">
+        <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="Talkity" Description="AI Voice Dictation" Target="[#TalkityExe]" WorkingDirectory="INSTALLFOLDER" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="DesktopFolder" />
+    <DirectoryRef Id="StartMenuFolder" />
+  </Product>
+</Wix>

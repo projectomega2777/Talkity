@@ -8,6 +8,9 @@
     "web": "node server.js",
     "desktop": "python desktop/talkity_desktop.py",
     "test": "node test.js",
+    "test:extension": "node test_extension.js",
+    "test:server": "node test_server_transcribe.js",
+    "test:all": "node test.js && node test_extension.js && node test_server_transcribe.js",
     "test:desktop": "py desktop/test_protocol.py"
   },
   "keywords": ["voice", "dictation", "whisper", "speech-to-text", "ai", "transcription"],
