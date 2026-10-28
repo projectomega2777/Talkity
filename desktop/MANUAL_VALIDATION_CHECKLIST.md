@@ -1,8 +1,8 @@
 # Talkity Manual Validation Checklist — Whisper Desktop Transcription
 
-**Version:** 1.0  
-**Date:** 2026-10-26  
-**Build:** Talkity.exe (73728 bytes), TalkityTests.exe (95232 bytes)  
+**Version:** 1.1.0 (sections 1–9 were written for 1.0; the transcription code is unchanged)  
+**Date:** 2026-10-26, installer section added 2026-10-28  
+**Build:** Talkity.exe (124,928 bytes), TalkitySetup.exe (2,140,042 bytes)  
 **Server:** https://talkity-qifh.onrender.com/
 
 ---
@@ -180,7 +180,30 @@ Repeat **Section 3** with engine set to `system_speech` in Settings.
 
 ---
 
-## 10. Sign-Off
+## 10. Installer, Upgrade and Distribution Checks (Talkity 1.1.0)
+
+Run these against `release\output\TalkitySetup.exe` on a clean machine. The
+desktop build and installer were exercised per-user on Windows 10 during the
+release session; every row below is still outstanding.
+
+| # | Action | Expected Result | Pass/Fail |
+|---|--------|-----------------|-----------|
+| 10.1 | Install on a clean Windows 10 machine as administrator | UAC prompt, installs to `C:\Program Files\Talkity`, Start Menu entry created | |
+| 10.2 | Install on a clean Windows 11 machine as administrator | Same as 10.1 (Windows 11 untested at release time) | |
+| 10.3 | Run `TalkitySetup.exe /CURRENTUSER` as a standard user | No UAC prompt, installs to `%LOCALAPPDATA%\Programs\Talkity` | |
+| 10.4 | Open Settings → Apps → Installed apps | Exactly one "Talkity 1.1.0" entry, publisher Talkity, correct icon | |
+| 10.5 | Launch from the Start Menu, dictate, insert into Notepad | Text inserted at the caret; HUD transitions Listening → Processing → result | |
+| 10.6 | Run the installer again while Talkity is running | App closes, files replaced, app relaunches in the background and reconnects | |
+| 10.7 | Check settings, hotkey and HUD position after the upgrade | Unchanged from before the upgrade | |
+| 10.8 | Uninstall via Settings → Apps → Talkity → Uninstall | App files, both shortcuts and the Apps & Features entry removed | |
+| 10.9 | Check `%APPDATA%\Talkity` after uninstall | `settings.json`, `history.json` and `talkity.log` still present and unmodified | |
+| 10.10 | First run on a machine that has never seen the installer | SmartScreen reports "unknown publisher"; "More info → Run anyway" completes | |
+| 10.11 | Scan installer and installed exe with Defender plus one third-party AV | No quarantine, no false positive | |
+| 10.12 | Enable "Launch at startup" in Settings, then reboot | Tray app starts hidden with no main window and the WebSocket connects | |
+
+---
+
+## 11. Sign-Off
 
 | Engine | Language | Sentences Tested | Avg Transcription Time | Insertion Success Rate | Accuracy Rating (1-5) | Blocker? |
 |--------|----------|------------------|------------------------|------------------------|------------------------|----------|

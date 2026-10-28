@@ -3,7 +3,8 @@
 **Release date:** 28 October 2026
 **Installer:** `TalkitySetup.exe` (2,140,042 bytes)
 **SHA256:** `10AE8359CE5E1508E758D612FE4AB880940C0C291B48AA03DE089B38CFFAEFCE`
-**Source:** tag `v1.1.0`
+**Source:** tag `v1.1.0` (see `release\RELEASE.md` — tags are published separately
+from commits)
 
 This is the first packaged Windows release of the Talkity desktop client. Earlier
 tags contained the protocol work and the browser extension only; the C# desktop
@@ -91,14 +92,17 @@ TalkitySetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
 ## Verification performed
 
-Executed on this machine (non-elevated session, no clean VM):
+Executed on Windows 10 Pro 22H2 (build 19045), 64-bit, .NET Framework 4.8.09037,
+in a non-elevated session. No clean VM and no Windows 11 machine was available.
 
 * C# suite: **297 passed, 0 failed**; Node suites: all pass.
 * Application build: exit 0, version resource 1.1.0.0.
 * Live launch: WebSocket connected, server acknowledged, `connected=true`;
   settings file unchanged across restarts.
-* Live dictation against the production endpoint: HTTP 200, language detection
-  working, clipboard fallback used when Talkity itself held focus.
+* Live dictation against the production endpoint — HTTP 200, language detection
+  and clipboard fallback when Talkity itself held focus — was recorded **before**
+  the packaging changes, using the same unchanged transcription code. It was
+  **not** re-run from the installed build; that remains a manual test below.
 * Installer: fresh per-user install, upgrade over a running instance, uninstall,
   reinstall with the desktop-shortcut task, uninstall — all exit code 0, with
   shortcuts, ARP entry, install-directory contents, autostart entry and user
@@ -125,20 +129,38 @@ Executed on this machine (non-elevated session, no clean VM):
 
 ## Remaining manual tests
 
-These require a clean Windows environment and/or hardware not available here:
+None of the checks below were performed for v1.1.0. They require a clean Windows
+machine, elevation, and a real microphone, none of which were available. Treat
+this list as the gate between "release candidate" and "public release".
 
-1. Install on a clean Windows 10 and a clean Windows 11 VM, per-machine (UAC),
-   and confirm the app launches from the Start Menu shortcut.
-2. Dictate with a real microphone and confirm automatic insertion into Notepad,
-   a browser text field and an Office application.
-3. Confirm settings, hotkey and HUD position persist across an app restart and
-   across an upgrade.
-4. Upgrade from the previously distributed build (if any) and confirm a single
-   Add/Remove Programs entry remains.
-5. Uninstall through Settings → Apps and confirm `%APPDATA%\Talkity` is kept.
-6. Verify behaviour with SmartScreen and at least one antivirus product.
-7. Test on a non-English Windows installation and at 125 %/150 % display scaling.
-8. Test with a second Windows user account (per-machine install, separate
-   `%APPDATA%`).
-9. Enable "Launch at startup" and reboot to confirm the tray app starts hidden
-   and connects.
+### Installation and lifecycle
+
+| # | Test | Environment | Pass criteria |
+|---|------|-------------|---------------|
+| 1 | Clean install, per-machine | Clean Windows 10 VM, admin user | UAC prompt appears, install completes, `C:\Program Files\Talkity\Talkity.exe` exists, Start Menu shortcut launches the app |
+| 2 | Clean install, per-machine | Clean Windows 11 VM, admin user | Same as #1; Windows 11 was never exercised |
+| 3 | Per-user install | Non-admin Windows account | `TalkitySetup.exe /CURRENTUSER` installs to `%LOCALAPPDATA%\Programs\Talkity` with no UAC prompt |
+| 4 | Apps & Features entry | Any | Exactly one "Talkity 1.1.0" entry, publisher "Talkity", correct icon and version |
+| 5 | Upgrade over running app | Machine with a previous build | Running instance closes, files are replaced, app relaunches and reconnects, one Apps & Features entry remains, settings/hotkey/HUD position unchanged |
+| 6 | Uninstall | Apps & Features → Talkity → Uninstall | App closes, install dir and both shortcuts removed, Apps & Features entry gone, `%APPDATA%\Talkity` (settings, history, log) still present and unmodified |
+
+### SmartScreen and antivirus
+
+| # | Test | Environment | Pass criteria |
+|---|------|-------------|---------------|
+| 7 | SmartScreen first run | Machine that has never seen the binary | Warning is the expected "unknown publisher" for an unsigned installer; "More info → Run anyway" completes the install |
+| 8 | Antivirus scan | Windows Defender plus one third-party AV | `TalkitySetup.exe` and the installed `Talkity.exe` are neither quarantined nor blocked; no false positive reported |
+
+### Application behaviour on the installed build
+
+| # | Test | Environment | Pass criteria |
+|---|------|-------------|---------------|
+| 9 | Microphone dictation | Machine with a real microphone | `F8` starts and stops recording, HUD moves Listening → Processing → result, transcript returned |
+| 10 | Automatic text insertion | Notepad, a browser text field, an Office app | Text is inserted at the caret without manual paste; clipboard fallback only when no target window can be captured |
+| 11 | Settings persistence | Restart and upgrade | Hotkey, language, engine, HUD position and tone survive both |
+| 12 | Launch at startup | Enable in Settings, then reboot | Tray app starts hidden (`--background`), connects, and shows no main window |
+| 13 | Non-English Windows, 125 %/150 % scaling | Localised Windows VM | HUD and settings dialog render correctly; hotkey still registers |
+| 14 | Second Windows user | Per-machine install, second account | Each user gets a separate `%APPDATA%\Talkity`; uninstalling does not affect the other account's data |
+
+Sections 1–9 of `desktop\MANUAL_VALIDATION_CHECKLIST.md` cover transcription
+accuracy and insertion behaviour in more detail.

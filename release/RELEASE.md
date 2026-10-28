@@ -63,11 +63,38 @@ upgrade and uninstall behaviour are documented in
 7. Install, upgrade over a running instance, uninstall; confirm
    `%APPDATA%\Talkity` survives.
 8. Record the SHA256 of `TalkitySetup.exe` in the release notes.
-9. Tag: `git tag -a v1.1.0 -m "Talkity 1.1.0"`.
+9. Tag with the message actually used for this release:
+
+   ```bat
+   git tag -a v1.1.0 -m "Talkity 1.1.0 - first packaged Windows release (installer + desktop client)"
+   ```
+
+   A tag is a local ref: `git push origin main` does **not** send it. See
+   "Publishing" below.
+
+## Publishing
+
+Commits and tags are published separately. Neither command sends the other.
+
+```bat
+git push origin main      :: publishes the commits; Render redeploys on push to main
+git push origin v1.1.0    :: publishes the release tag
+```
+
+Confirm both landed:
+
+```bat
+git ls-remote origin refs/heads/main refs/tags/v1.1.0
+```
+
+Pushing the tag is what lets `git clone` + `git checkout v1.1.0` reproduce the
+released tree. `v1.0.0` was never pushed, so `v1.1.0` is the only release tag that
+will resolve on the remote once it is sent.
 
 ## Verification log — 2026-10-28
 
-Environment: Windows 10/11 desktop, non-elevated user session, no clean VM.
+Environment: Windows 10 Pro 22H2 (build 19045), 64-bit, .NET Framework 4.8.09037,
+non-elevated user session. No clean VM and no Windows 11 machine was available.
 
 | Check | Result |
 |-------|--------|
@@ -80,7 +107,7 @@ Environment: Windows 10/11 desktop, non-elevated user session, no clean VM.
 | `Talkity.exe` version resource | 1.1.0.0, `Talkity` |
 | Launch + WebSocket | connected, server acknowledged, `connected=true` |
 | Settings persistence across restart | `settings.json` hash unchanged |
-| Live dictation (production endpoint) | HTTP 200, language detection (Hindi/English) |
+| Live dictation (production endpoint) | HTTP 200 and Hindi/English detection observed **before** the packaging changes, with unchanged transcription code; **not re-run from the installed build** |
 | `Talkity.exe --background` | crashed before fix, stays connected after fix |
 | Fresh install (per-user) | exit 0, files/shortcuts/ARP correct |
 | Upgrade over running instance | app closed, files replaced, app relaunched and connected |
@@ -91,6 +118,23 @@ Environment: Windows 10/11 desktop, non-elevated user session, no clean VM.
 | Per-machine install (UAC) | **not tested** — session not elevated |
 | Clean VM install/upgrade/uninstall | **not tested** — no clean environment available |
 | Code signature | **unsigned** — no certificate available |
+
+## What a push to `main` deploys
+
+Render deploys `main` on push. The v1.1.0 push changed no server code —
+`server.js` and `api/` are byte-identical to the previously deployed revision —
+but it did ship browser-side changes that are now live:
+
+* `public/app.js` — heartbeat acknowledgement, `desktop_status` handling and
+  exponential reconnect backoff for the web client.
+* `index.html` and `public/index.html` — a Google AdSense loader
+  (`client=ca-pub-9406721408580145`). It was already present in the working tree
+  before this release and is permitted by the server's Content-Security-Policy.
+  No ad units (`<ins class="adsbygoogle">`) exist, so the script loads but no ads
+  are rendered.
+
+Every deploy restarts the service and drops active WebSocket sessions; the
+desktop client reconnects with exponential backoff.
 
 ## Artifacts
 
