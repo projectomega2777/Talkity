@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SUPERSEDED - do not build this file.
+
+  This WiX v3 skeleton is kept for reference only. It never built successfully:
+  it references an undefined StartMenuFolder, requires a release\Talkity.ico that
+  did not exist, has no MajorUpgrade element (so upgrades would install side by
+  side) and declares shortcut components without a key path.
+
+  The shipped installer is release\installer\Talkity.iss (Inno Setup 6.7.3),
+  built by release\installer\build_installer.bat.
+-->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <!-- Talkity Desktop Installer — WiX v3 -->
   <!-- This file defines a per-user, per-machine-capable MSI. -->

@@ -225,7 +225,21 @@ namespace TalkityDesktop
             if (args != null)
                 for (int i = 0; i < args.Length; i++)
                     if (args[i] == "--background") background = true;
-            if (!background) _main.Show();
+            if (!background)
+            {
+                _main.Show();
+            }
+            else
+            {
+                // Autostart path: the main window stays hidden, but WebSocket and
+                // injection callbacks marshal onto the UI thread with BeginInvoke,
+                // which requires a window handle. Reading Handle creates it without
+                // showing the form. Without this the process crashed on the first
+                // connection whenever it was started with --background.
+                IntPtr handle = _main.Handle;
+                if (handle == IntPtr.Zero)
+                    TalkityLog.Warn("Main window handle could not be created");
+            }
 
             BuildTray();
             InitSpeech();

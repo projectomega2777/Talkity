@@ -1,123 +1,105 @@
-# Talkity Desktop — Release Build Instructions
+# Talkity Desktop — Release Engineering
+
+How the Windows build and installer are produced, and what has actually been
+verified. Release notes for the current version live in
+`release\RELEASE_NOTES_1.1.0.md`.
 
 ## Requirements
 
-- Windows 10/11 with .NET Framework 4.5 or later installed
-- Visual C# compiler (v4.0.30319 or newer) — included with .NET Framework
-- System.Speech.dll (GAC assembly) — part of .NET Framework
+| Requirement | Notes |
+|-------------|-------|
+| Windows 10 / 11 | Development and target platform |
+| .NET Framework 4.x | Supplies `csc.exe` and `System.Speech` (GAC) |
+| Inno Setup 6.7.3 | Installer compiler only; see `release\installer\README.md` |
 
-No external NuGet packages, runtime installers, or third-party libraries are required.
+The application itself needs no NuGet packages, native libraries, VC++ runtime
+or admin rights. It is AnyCPU IL-only code, so it runs 64-bit on 64-bit Windows.
 
-## Clean Build (Release)
+## Build
 
-From the repository root (Windows Command Prompt or PowerShell):
-
-```cmd
+```bat
 build_app.bat
 ```
 
-This produces `Talkity.exe` (release binary) in the repository root.
+Produces `Talkity.exe` in the repository root: `AssemblyVersion`/`FileVersion`
+1.1.0.0, product name `Talkity`, embedded application icon. Expect
+`Build exited with code 0`.
 
-Result: `Build exited with code 0`
+Close Talkity first — `csc.exe` cannot overwrite a running executable
+(`CS0016 ... being used by another process`).
 
-## Test Suite
+## Tests
 
-```cmd
-build_tests.bat
-TalkityTests.exe
+```bat
+build_tests_run.bat     :: compiles and runs TalkityTests.exe
+npm run test:all        :: node test.js && node test_extension.js && node test_server_transcribe.js
 ```
 
-Expected result: `Results: 149 passed, 0 failed`
+Expected: `Results: 297 passed, 0 failed` and `[ALL TESTS PASSED]` for the C#
+suite; all three Node suites pass.
 
-## Build Artifacts
+`Polish skipped: endpoint has no HTTP equivalent` is expected output — the suite
+deliberately exercises `TalkityPolish.Enhance("ftp://nope", ...)`.
 
-| File | Size | Purpose |
-|------|------|---------|
-| `Talkity.exe` | ~64 KB | Application executable |
-| `TalkityTests.exe` | ~32 KB | Automated test executable |
+## Installer
 
-Both are standalone .NET executables (no installer required to run, but recommended for distribution).
-
-## Installation (Manual — No Installer Required)
-
-Because the application requires no administrator privileges and writes user settings to `%APPDATA%\Talkity\`, it can be distributed as a portable executable:
-
-1. Copy `Talkity.exe` to any folder (e.g., `C:\Program Files\Talkity\` or user folder).
-2. Launch `Talkity.exe`.
-3. Settings (`settings.json`), history (`history.json`), and logs (`talkity.log`) are written to the user's `%APPDATA%\Talkity\` directory, not the install folder.
-4. To remove: delete the executable folder and optionally delete `%APPDATA%\Talkity\` to erase user data.
-
-## Per-User Installation (No Admin)
-
-Recommended for a clean install experience:
-
-```cmd
-mkdir "%LOCALAPPDATA%\Talkity"
-copy Talkity.exe "%LOCALAPPDATA%\Talkity\"
+```bat
+release\installer\build_installer.bat
 ```
 
-Shortcut (manual):
+Produces `release\output\TalkitySetup.exe` (gitignored). Details of the install,
+upgrade and uninstall behaviour are documented in
+`release\installer\README.md`.
 
-```cmd
-echo Set WshShell = CreateObject("WScript.Shell") > %TEMP%\talkity_shortcut.vbs
-echo WshShell.CreateShortcut("%APPDATA%\Microsoft\Windows\Start Menu\Programs\Talkity.lnk").TargetPath = "%LOCALAPPDATA%\Talkity\Talkity.exe" >> %TEMP%\talkity_shortcut.vbs
-wscript %TEMP%\talkity_shortcut.vbs
-```
+## Release checklist
 
-## Settings Persistence (Upgrade / Uninstall)
+1. `git status` clean, on `main`.
+2. `build_app.bat` → exit code 0.
+3. `build_tests_run.bat` → 297 passed, 0 failed.
+4. `npm run test:all` → all suites pass.
+5. Launch `Talkity.exe`, confirm `WebSocket connected` and
+   `Server acknowledged connection` in `%APPDATA%\Talkity\talkity.log`.
+6. `release\installer\build_installer.bat` → `Successful compile`.
+7. Install, upgrade over a running instance, uninstall; confirm
+   `%APPDATA%\Talkity` survives.
+8. Record the SHA256 of `TalkitySetup.exe` in the release notes.
+9. Tag: `git tag -a v1.1.0 -m "Talkity 1.1.0"`.
 
-- **Upgrade / Reinstall**: Existing `%APPDATA%\Talkity\settings.json`, `history.json`, and `talkity.log` are preserved automatically because they live outside the installation folder.
-- **Uninstall (complete)**: Delete `%APPDATA%\Talkity\` manually. The executable folder can then be removed safely.
-- **Uninstall (quick)**: Only delete the executable folder; user preferences remain for next install.
+## Verification log — 2026-10-28
 
-## Runtime Dependencies (Documented)
+Environment: Windows 10/11 desktop, non-elevated user session, no clean VM.
 
-- .NET Framework 4.5+ (standard on Windows 10/11)
-- `System.Speech.dll` — GAC assembly (included with .NET Framework)
-- `System.Windows.Forms.dll` — GAC assembly
-- `System.Drawing.dll` — GAC assembly
-- A working Windows microphone for dictation (optional at install; required for use)
+| Check | Result |
+|-------|--------|
+| `build_tests_run.bat` (before changes) | 297 passed, 0 failed |
+| `npm run test:all` (before changes) | all suites pass |
+| Merge `origin/main` into `phase3-csharp-client` | clean, no conflicts |
+| `server.js` / `data/dictionary.json` vs `origin/main` | byte-identical |
+| `build_tests_run.bat` (after merge) | 297 passed, 0 failed |
+| `build_app.bat` (after merge) | exit 0 |
+| `Talkity.exe` version resource | 1.1.0.0, `Talkity` |
+| Launch + WebSocket | connected, server acknowledged, `connected=true` |
+| Settings persistence across restart | `settings.json` hash unchanged |
+| Live dictation (production endpoint) | HTTP 200, language detection (Hindi/English) |
+| `Talkity.exe --background` | crashed before fix, stays connected after fix |
+| Fresh install (per-user) | exit 0, files/shortcuts/ARP correct |
+| Upgrade over running instance | app closed, files replaced, app relaunched and connected |
+| Autostart entry across upgrade | preserved (removed by old uninstaller, restored after) |
+| Uninstall | exit 0, app files/shortcuts/ARP/Run entry removed |
+| User data after uninstall | `settings.json` byte-identical, `history.json` intact |
+| Desktop-shortcut task | shortcut created, removed on uninstall |
+| Per-machine install (UAC) | **not tested** — session not elevated |
+| Clean VM install/upgrade/uninstall | **not tested** — no clean environment available |
+| Code signature | **unsigned** — no certificate available |
 
-## Security / Distribution Notes
+## Artifacts
 
-- **Code signing**: Not applied. `Talkity.exe` does not contain an Authenticode signature. If distributing to users, sign with an EV or OV certificate using `signtool.exe` from the Windows SDK before release.
-- **No secrets embedded**: No API keys, WebSocket URLs with tokens, or user data are inside the executable.
-- **No telemetry / updates**: No automatic update mechanism, no telemetry payload, no online tracking.
-- **No admin requirement**: The application runs with standard user privileges.
+| File | Notes |
+|------|-------|
+| `Talkity.exe` | Built by `build_app.bat`, gitignored |
+| `release\output\TalkitySetup.exe` | Built by `build_installer.bat`, gitignored |
+| `release\installer\Talkity.iss` | Installer definition |
+| `release\installer\talkity.ico` | Generated icon (app + setup) |
 
-## Windows Compatibility
-
-- Works on Windows 10 Pro (build 19045) and Windows 11.
-- Uses `RegisterHotKey` (global) — requires no admin for user-level shortcuts.
-- Uses `System.Speech.Recognition.SpeechRecognitionEngine` — requires Windows Speech platform installed.
-- Playback / clipboard injection uses `keybd_event` — may be blocked by UAC-elevated targets or protected applications.
-
-## Installer Status
-
-No MSI / MSIX / WiX-built installer is provided in this release because:
-- The executable is fully portable.
-- Per-user installation does not require elevation.
-- User settings are kept outside the install directory by design.
-
-If an MSI is required for organizational deployment, use `build/app.bat` with WiX (see `release/TalkityInstaller.wxs` as a skeleton), build with `candle` + `light`, and sign with `signtool`.
-
-## Release Checklist
-
-- [x] Source builds reproducibly (`build_app.bat`)
-- [x] All unit tests pass (`build_tests.bat`, 149 passed)
-- [x] Executable launches and exits correctly (verified)
-- [x] Protocol v1.0.0 preserved (`TalkityWsClient` unchanged)
-- [x] Settings / history / logs go to `%APPDATA%\Talkity\`
-- [x] No secrets in executable or source
-- [x] No telemetry or automatic updates added
-- [ ] Windows integration test — manual dictation into Notepad, Word, browser
-- [ ] Global hotkey test — F8 in foreground app (requires Windows desktop)
-- [ ] Clipboard restore verification — paste in protected fields (requires Windows)
-- [ ] HUD drag/reposition test (requires mouse interaction)
-- [ ] System tray behavior — hide/show/exit (requires Windows tray session)
-- [ ] Code signing with EV/OV certificate (pending)
-- [ ] MSI installer build (optional; skeleton `release/TalkityInstaller.wxs` provided)
-
----
-*Release build produced at: 2026-10-25*
-*Environment: Windows 10 Pro 10.0.19045 / .NET Framework 4.8*
+Build outputs are gitignored on purpose: a release is rebuilt from source, not
+committed as a binary blob.
