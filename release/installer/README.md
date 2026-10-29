@@ -8,7 +8,7 @@ Builds `release\output\TalkitySetup.exe` from the compiled desktop client.
 |------|-------|
 | Compiler | Inno Setup 6.7.3 (`ISCC.exe`) |
 | Download | https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe |
-| Installer SHA256 | `9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732` |
+| Installer SHA256 | `13B97A4D83F03317B21FF2D5BC1F33848F1CD3DFCA7219CDF28B1D7F0C964179` |
 | Script | `release\installer\Talkity.iss` |
 | Output | `release\output\TalkitySetup.exe` (gitignored) |
 
@@ -78,7 +78,7 @@ only requires regenerating that file.
 
 **Prerequisite**
 
-`InitializeSetup` requires .NET Framework 4.0 or later (registry `Release` /
+`InitializeSetup` requires .NET Framework 4.5 or later (registry `Release` /
 `Install` check under `NDP\v4`). Windows 10 and 11 include it. No VC++ runtime,
 no native libraries, no NuGet packages, no background services.
 

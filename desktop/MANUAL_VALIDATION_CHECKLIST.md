@@ -2,7 +2,7 @@
 
 **Version:** 1.1.0 (sections 1–9 were written for 1.0; the transcription code is unchanged)  
 **Date:** 2026-10-26, installer section added 2026-10-28  
-**Build:** Talkity.exe (124,928 bytes), TalkitySetup.exe (2,140,042 bytes)  
+**Build:** Talkity.exe (124,928 bytes), TalkitySetup.exe (2,140,040 bytes)  
 **Server:** https://talkity-qifh.onrender.com/
 
 ---

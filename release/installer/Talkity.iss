@@ -213,7 +213,7 @@ begin
   Result := DotNet4Installed;
   if not Result then
   begin
-    MsgBox('Talkity requires Microsoft .NET Framework 4.0 or later.' + #13#10 + #13#10 +
+    MsgBox('Talkity requires Microsoft .NET Framework 4.5 or later.' + #13#10 + #13#10 +
            'Windows 10 and Windows 11 include it by default. On older versions of ' +
            'Windows, install it from https://dotnet.microsoft.com/download/dotnet-framework ' +
            'and run this installer again.', mbError, MB_OK);

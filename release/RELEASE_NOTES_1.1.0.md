@@ -1,8 +1,8 @@
 # Talkity 1.1.0 — Release Notes
 
 **Release date:** 28 October 2026
-**Installer:** `TalkitySetup.exe` (2,140,042 bytes)
-**SHA256:** `10AE8359CE5E1508E758D612FE4AB880940C0C291B48AA03DE089B38CFFAEFCE`
+**Installer:** `TalkitySetup.exe` (2,140,040 bytes)
+**SHA256:** `13B97A4D83F03317B21FF2D5BC1F33848F1CD3DFCA7219CDF28B1D7F0C964179`
 **Source:** tag `v1.1.0` (see `release\RELEASE.md` — tags are published separately
 from commits)
 
@@ -74,7 +74,7 @@ TalkitySetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
 * Windows 10 or Windows 11 (Windows 7 SP1+ is permitted by the package, but is
   untested).
-* .NET Framework 4.0 or later. Included with Windows 10/11; the installer refuses
+* .NET Framework 4.5 or later. Included with Windows 10/11; the installer refuses
   to run and explains how to obtain it if it is missing.
 * A working microphone and an internet connection to the Talkity service.
 * No admin rights are needed to *run* the app, only to install it per-machine.
