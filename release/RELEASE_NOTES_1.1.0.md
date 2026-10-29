@@ -129,9 +129,10 @@ in a non-elevated session. No clean VM and no Windows 11 machine was available.
 
 ## Remaining manual tests
 
-None of the checks below were performed for v1.1.0. They require a clean Windows
-machine, elevation, and a real microphone, none of which were available. Treat
-this list as the gate between "release candidate" and "public release".
+None of the checks below were completed for v1.1.0. They require a clean Windows
+machine, elevation, and a scored dictation with a real microphone. The only
+installed-build exercise so far is the ambient-audio dictation logged in
+`release\RELEASE.md` (2026-10-29); every row below is still open.
 
 ### Installation and lifecycle
 

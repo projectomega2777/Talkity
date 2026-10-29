@@ -107,7 +107,7 @@ non-elevated user session. No clean VM and no Windows 11 machine was available.
 | `Talkity.exe` version resource | 1.1.0.0, `Talkity` |
 | Launch + WebSocket | connected, server acknowledged, `connected=true` |
 | Settings persistence across restart | `settings.json` hash unchanged |
-| Live dictation (production endpoint) | HTTP 200 and Hindi/English detection observed **before** the packaging changes, with unchanged transcription code; **not re-run from the installed build** |
+| Live dictation (production endpoint) | HTTP 200 and Hindi/English detection observed **before** the packaging changes; **superseded** by the 2026-10-29 entry below, which re-ran dictation from the installed build |
 | `Talkity.exe --background` | crashed before fix, stays connected after fix |
 | Fresh install (per-user) | exit 0, files/shortcuts/ARP correct |
 | Upgrade over running instance | app closed, files replaced, app relaunched and connected |
@@ -119,6 +119,26 @@ non-elevated user session. No clean VM and no Windows 11 machine was available.
 | Clean VM install/upgrade/uninstall | **not tested** — no clean environment available |
 | Code signature | **unsigned** — no certificate available |
 
+### 2026-10-29 — rebuilt installer (corrected .NET 4.5 message)
+
+The installer was rebuilt so its "requires .NET Framework" dialog matches the
+4.5 check. The previous binary
+(`10AE8359CE5E1508E758D612FE4AB880940C0C291B48AA03DE089B38CFFAEFCE`) was
+replaced; the new one is 2,140,040 bytes, SHA256
+`13B97A4D83F03317B21FF2D5BC1F33848F1CD3DFCA7219CDF28B1D7F0C964179`.
+
+| Check | Result |
+|-------|--------|
+| `build_installer.bat` | `Successful compile`, hash matches the value recorded in the release notes |
+| Per-user install of the rebuilt installer | exit 0; `%LOCALAPPDATA%\Programs\Talkity` contains `Talkity.exe`, `unins000.exe`, `unins000.dat` |
+| Reinstall over the running app | running instance closed, files replaced, app relaunched in the background and reconnected |
+| Installed `Talkity.exe` | 1.1.0.0, hash identical to the build output |
+| Start Menu folder / ARP entry | `Talkity\Talkity.lnk` and `Talkity\Uninstall Talkity.lnk` created; "Talkity 1.1.0" registered per-user |
+| Launch after install | background start, WebSocket connected, `connected=true`, no main window |
+| Dictation from the installed build | mic captured 3.49 s, `HTTP 200`, transcript inserted at the caret in Notepad |
+| User data across install | `settings.json` hash unchanged, `history.json` untouched |
+| .NET error dialog | **not tested** — needs a machine without .NET 4.5 |
+
 ## What a push to `main` deploys
 
 Render deploys `main` on push. The v1.1.0 push changed no server code —
@@ -128,10 +148,11 @@ but it did ship browser-side changes that are now live:
 * `public/app.js` — heartbeat acknowledgement, `desktop_status` handling and
   exponential reconnect backoff for the web client.
 * `index.html` and `public/index.html` — a Google AdSense loader
-  (`client=ca-pub-9406721408580145`). It was already present in the working tree
-  before this release and is permitted by the server's Content-Security-Policy.
-  No ad units (`<ins class="adsbygoogle">`) exist, so the script loads but no ads
-  are rendered.
+  (`client=ca-pub-9406721408580145`), present in the working tree before the
+  release and permitted by the server's Content-Security-Policy. No ad units
+  existed, so it loaded without rendering ads. It has since been removed from
+  both pages along with the AdSense-specific CSP allowances; the next push to
+  `main` deploys that removal.
 
 Every deploy restarts the service and drops active WebSocket sessions; the
 desktop client reconnects with exponential backoff.
