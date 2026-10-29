@@ -45,13 +45,12 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com",
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: https://*.google.com https://*.googleusercontent.com https://*.googlesyndication.com",
+      "img-src 'self' data:",
       "media-src 'self' blob:",
-      "connect-src 'self' https://api.groq.com https://api.openai.com wss: ws: https://pagead2.googlesyndication.com https://*.google.com https://*.googlesyndication.com",
-      "frame-src 'self' https://googleads.g.doubleclick.net https://*.google.com https://*.googlesyndication.com",
+      "connect-src 'self' https://api.groq.com https://api.openai.com wss: ws:",
       "object-src 'none'",
       "base-uri 'self'",
       "frame-ancestors 'none'"
