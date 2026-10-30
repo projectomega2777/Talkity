@@ -20,6 +20,53 @@ ws://localhost:3000
 
 ---
 
+## Authentication
+
+WebSocket connections and all REST endpoints (`/api/*` and the legacy
+root-mounted routes) require authentication, enforced server-side.
+
+**Configuration.** The deployment token is configured once, server-side, via
+the `TALKITY_API_TOKEN` environment variable. It is never embedded in shipped
+client JavaScript; users enter it in their client's settings.
+
+**WebSocket.** A connection is considered authenticated by any of:
+
+1. A frame `{type: 'auth', token: <token>}` sent immediately after connect.
+2. A `token` field inside the first `register_desktop` /
+   `register_extension` frame.
+3. A `?token=` query parameter on the connection URL.
+
+Until authenticated, only `heartbeat` frames are honoured. Unauthenticated
+connections that do not authenticate within **6 000 ms** are closed with code
+**4001** (`unauthorized`). Any unauthenticated non-keepalive frame with an
+invalid token also closes the connection with 4001.
+
+| Type | Direction | Fields |
+|------|-----------|--------|
+| `auth` | Client → Server | `{type: "auth", token: string}` |
+| `authenticated` | Server → Client | `{type: "authenticated", ok: true}` — sent after frame auth succeeds |
+
+**REST.** Send one of:
+
+- `Authorization: Bearer <token>` header, or
+- `x-talkity-token: <token>` header.
+
+**Requests with missing or invalid tokens receive HTTP 401.**
+**Local development bypass:** when no `TALKITY_API_TOKEN` is configured and
+the server is not in production mode (`NODE_ENV=production` / Vercel), requests
+and WebSocket connections originating from a loopback address (127.0.0.1, `::1`)
+are authenticated automatically. In production mode with no token configured,
+the server fails closed (HTTP 503).
+
+> **⚠️ Single-tenant model.** This is a shared-token deployment model, intended
+> for private single-tenant beta use only. Every holder of the shared token
+> must be treated as fully trusted. There is no per-user identity: authenticated
+> clients can see each other's transcription relays and server injection
+> events, and there is no tenant isolation. Multi-user deployment is unsupported
+> until per-user authentication and authorization are implemented.
+
+---
+
 ## Message Schemas
 
 ### Server → Client

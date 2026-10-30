@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://talkity.vercel.app/sitemap.xml

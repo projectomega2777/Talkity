@@ -50,7 +50,7 @@ extension/
 
 3. **Click "Load unpacked"** and select the `extension/` directory:
    ```
-   D:\System PC\talkity\extension
+   <talkity-repo>/extension
    ```
 
 4. **Verify Installation:**
@@ -73,7 +73,7 @@ The extension defaults to `ws://localhost:3000`. To change:
 
 **Examples:**
 - Local development: `ws://localhost:3000`
-- Vercel deployment: `wss://talkity.vercel.app` (note: `wss://` for HTTPS)
+- Production deployment: `wss://talkity-qifh.onrender.com/` (note: `wss://` for HTTPS)
 - Docker container: `ws://host.docker.internal:3000`
 
 ---
@@ -91,7 +91,7 @@ The extension defaults to `ws://localhost:3000`. To change:
 
 ### With Server-Side Polishing
 
-If Talkity server has AI keys configured (`GROQ_KEY` or `OPENAI_KEY` in `.env`):
+If Talkity server has AI keys configured (`GROQ_API_KEY` or `OPENAI_API_KEY` in `.env`):
 
 1. Dictate and record as above
 2. On the **web dashboard** (`http://localhost:3000`):
@@ -176,7 +176,7 @@ If Talkity server has AI keys configured (`GROQ_KEY` or `OPENAI_KEY` in `.env`):
 
 ```bash
 # Terminal 1: Start server
-cd D:\System PC\talkity
+cd <talkity-repo>
 node server.js
 
 # Terminal 2: Open a text editor or web page

@@ -64,6 +64,10 @@ PROTOCOL_VERSION = "1.0.0"
 SERVER_URL = "http://localhost:3000"
 WS_URL = "ws://localhost:3000"
 
+# 🛡️ SECURITY (B1): deployment token supplied via the environment only.
+# It is never embedded in the client source.
+API_TOKEN = os.environ.get("TALKITY_API_TOKEN", "").strip()
+
 # Heartbeat configuration (must match server.js: HEARTBEAT_INTERVAL, HEARTBEAT_TIMEOUT)
 HEARTBEAT_INTERVAL_MS = 30000
 HEARTBEAT_TIMEOUT_MS = 35000
@@ -164,13 +168,16 @@ class WebSocketSync:
         self.reconnect_delay = INITIAL_RECONNECT_DELAY_MS
         self.reconnect_attempts = 0
 
-        # Protocol handshake: register this desktop client
-        self._send({
+        # Protocol handshake: register this desktop client (token authenticates)
+        register_frame = {
             "type": "register_desktop",
             "clientId": self.client_id,
             "protocolVersion": PROTOCOL_VERSION,
             "timestamp": int(time.time() * 1000)
-        })
+        }
+        if API_TOKEN:
+            register_frame["token"] = API_TOKEN
+        self._send(register_frame)
 
         self.on_state_change({"connected": True, "clientId": self.client_id})
 
@@ -553,10 +560,13 @@ def inject_text_to_active_app(text):
 # ============================
 def http_post_json(url, data):
     try:
+        headers = {'Content-Type': 'application/json'}
+        if API_TOKEN:
+            headers['x-talkity-token'] = API_TOKEN
         req = urllib.request.Request(
             url,
             data=json.dumps(data).encode('utf-8'),
-            headers={'Content-Type': 'application/json'}
+            headers=headers
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             return json.loads(resp.read().decode('utf-8'))

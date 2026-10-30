@@ -25,31 +25,43 @@ let connectionState = {
   reconnectAttempts: 0
 };
 
+// 🛡️ SECURITY (B1): the deployment token is user-entered and lives in
+// chrome.storage.local — it is never hardcoded in shipped client JS. The
+// connection URL itself stays locked to PRODUCTION_WS_URL (see below).
+function getStoredApiToken(cb) {
+  chrome.storage.local.get(['talkityApiToken'], (cfg) => {
+    cb(cfg && typeof cfg.talkityApiToken === 'string' ? cfg.talkityApiToken : '');
+  });
+}
+
 function connectWebSocket() {
   const serverUrl = PRODUCTION_WS_URL;
   connectionState.url = serverUrl;
   console.log('[Talkity Background] Connecting to', serverUrl);
 
+  getStoredApiToken((apiToken) => {
   try {
     ws = new WebSocket(serverUrl);
 
-    ws.onopen = () => {
-      reconnectAttempts = 0;
-      connectionState.connected = true;
-      connectionState.reconnectAttempts = 0;
-      console.log('[Talkity Background] Connected to server:', serverUrl);
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+        connectionState.connected = true;
+        connectionState.reconnectAttempts = 0;
+        console.log('[Talkity Background] Connected to server:', serverUrl);
 
-      // Register extension as a client (Protocol v1.0.0)
-      ws.send(JSON.stringify({
-        type: 'register_extension',
-        clientId: 'ext-' + Math.random().toString(36).substring(2, 10),
-        protocolVersion: '1.0.0',
-        timestamp: Date.now()
-      }));
+        // Register extension as a client (Protocol v1.0.0)
+        const registerFrame = {
+          type: 'register_extension',
+          clientId: 'ext-' + Math.random().toString(36).substring(2, 10),
+          protocolVersion: '1.0.0',
+          timestamp: Date.now()
+        };
+        if (apiToken) registerFrame.token = apiToken;
+        ws.send(JSON.stringify(registerFrame));
 
-      // Start client heartbeat cycle (client ping every 20 s per spec)
-      startClientHeartbeat();
-    };
+        // Start client heartbeat cycle (client ping every 20 s per spec)
+        startClientHeartbeat();
+      };
 
     ws.onmessage = (event) => {
       try {
@@ -103,13 +115,12 @@ function connectWebSocket() {
       connectionState.connected = false;
       console.warn('[Talkity Background] WebSocket error:', err.message || 'unknown');
     };
-
-  } catch (e) {
-    console.warn('[Talkity Background] Connection failed:', e.message);
-    scheduleReconnect();
-  }
+    } catch (e) {
+      console.warn('[Talkity Background] Connection failed:', e.message);
+      scheduleReconnect();
+    }
+  });
 }
-
 let heartbeatTimer = null;
 
 function startClientHeartbeat() {

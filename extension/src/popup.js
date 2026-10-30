@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
   const transcriptBox = document.getElementById('transcriptBox');
+  const apiTokenInput = document.getElementById('apiTokenInput');
+  const saveTokenBtn = document.getElementById('saveTokenBtn');
 
   let isRecording = false;
   let recognition = null;
@@ -29,6 +31,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setInterval(updateConnectionStatus, 2000);
   updateConnectionStatus();
+
+  // 🛡️ SECURITY (B1): the deployment token lives in chrome.storage.local and
+  // never in shipped client JS. Saving it reconnects the bridge.
+  chrome.storage.local.get(['talkityApiToken'], (cfg) => {
+    if (cfg && cfg.talkityApiToken) apiTokenInput.value = cfg.talkityApiToken;
+  });
+  saveTokenBtn.addEventListener('click', () => {
+    const token = apiTokenInput.value.trim();
+    chrome.storage.local.set({ talkityApiToken: token }, () => {
+      if (typeof token !== 'string') return; // storage callback invariant
+      saveTokenBtn.textContent = 'Saved ✓';
+      setTimeout(() => { saveTokenBtn.textContent = 'Save'; }, 1500);
+      // Existing handler triggers a bridge reconnect with the new token.
+      chrome.runtime.sendMessage({ action: 'reload_connection' }, () => {});
+    });
+  });
 
   // Initialize Speech Recognition
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;

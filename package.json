@@ -10,7 +10,8 @@
     "test": "node test.js",
     "test:extension": "node test_extension.js",
     "test:server": "node test_server_transcribe.js",
-    "test:all": "node test.js && node test_extension.js && node test_server_transcribe.js",
+    "test:security": "node test_security.js",
+    "test:all": "node test.js && node test_extension.js && node test_server_transcribe.js && node test_security.js",
     "test:desktop": "py desktop/test_protocol.py"
   },
   "keywords": ["voice", "dictation", "whisper", "speech-to-text", "ai", "transcription"],

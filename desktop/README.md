@@ -10,7 +10,7 @@ Use the provided build scripts:
 
 ```powershell
 # Windows PowerShell
-./build_app.bat
+build_app.bat
 ```
 
 This produces `Talkity.exe` in the repository root. It requires:
@@ -22,7 +22,7 @@ This produces `Talkity.exe` in the repository root. It requires:
 ### Build the tests
 
 ```powershell
-./build_tests.bat
+build_tests.bat
 ```
 
 This produces `TalkityTests.exe`, which runs unit tests for the protocol, JSON handling,
@@ -32,7 +32,7 @@ the application shell.
 ### Running tests
 
 ```bash
-./build_tests_run.bat   # compiles, then runs the suite
+build_tests_run.bat   # compiles, then runs the suite (from the repository root)
 ```
 
 or, after building:
@@ -41,7 +41,7 @@ or, after building:
 TalkityTests.exe
 ```
 
-The current suite reports **290 passed, 0 failed** on a clean compile.
+The current suite reports **297 passed, 0 failed** on a clean compile.
 
 ## Repository Overview
 
@@ -199,8 +199,8 @@ All tests run standalone without external dependencies:
 - WAV header/word-alignment format
 - Text formatter word-preservation and WER regression
 
-Run the C# suite with `./build_tests_run.bat` (compiles and runs
-`TalkityTests.exe`). The current suite reports **290 passed, 0 failed**.
+Run the C# suite with `build_tests_run.bat` (compiles and runs
+`TalkityTests.exe` from the repository root). The current suite reports **297 passed, 0 failed**.
 
 Run the Node suites with:
 
@@ -227,7 +227,7 @@ This repository is built with the aim of a stable, native Windows experience. Ne
 
 ## Licensing
 
-Proprietary. See the original Talkity repository for usage terms.
+Talkity is proprietary software. The source code is not published under an open-source license and is not offered for public redistribution; usage terms are provided by the rights holder through official channels. Third-party components used by the product remain subject to their own licenses.
 
 ---
 

@@ -1,19 +1,50 @@
 node_modules/
-*.log
-.env
-.DS_Store
-Thumbs.db
-data/history.json
 
-# Build artifacts (recreated by build_app.bat / build_tests.bat)
+# Environment variables — never commit real values; .env.example holds placeholders
+.env
+.env.*
+!.env.example
+
+# Secrets & credentials
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials.json
+*.token
+
+data/history.json
+data/settings.json
+
+# Build artifacts (recreated by build_app.bat / build_tests.bat / installer build)
+*.exe
+*.msi
+release/output/
 Talkity.exe
 TalkityTests.exe
 csc_*.txt
 test_out.txt
 test_err.txt
 test_silence.wav
-desktop/__pycache__/
 
-# Installer build output (recreated by installer/build_installer.bat)
-release/output/
-*.msi
+# Python / C# dev artifacts
+desktop/__pycache__/
+__pycache__/
+*.pyc
+
+# Logs & caches
+*.log
+logs/
+npm-debug.log*
+cache/
+coverage/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+
+# AI agent / local tooling artifacts (not part of the product source)
+.agents/
+.claude/
+skills-lock.json

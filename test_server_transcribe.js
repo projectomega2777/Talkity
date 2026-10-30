@@ -7,8 +7,10 @@
 
 const assert = require('assert');
 
-// The handler prefers an explicit x-groq-key header, so the test never needs a
-// real key or an environment variable.
+// Provider keys are now resolved server-side only (B2 security remediation):
+// the test sets a fake key via the environment, never via client headers. The
+// Groq call itself is mocked, so no real key or network access is used.
+process.env.GROQ_API_KEY = 'test-groq-key';
 const app = require('./server');
 const realFetch = global.fetch;
 
@@ -58,7 +60,7 @@ function mockGroq(responseText) {
 async function postTranscribe(baseUrl, wav, headers) {
   const response = await realFetch(baseUrl + '/api/transcribe', {
     method: 'POST',
-    headers: Object.assign({ 'Content-Type': 'audio/wav', 'x-groq-key': 'test-key' }, headers || {}),
+    headers: Object.assign({ 'Content-Type': 'audio/wav' }, headers || {}),
     body: wav
   });
   const json = await response.json();

@@ -358,7 +358,7 @@ body {
   background: var(--card-border);
 }
 
-/* Floating HUD Capsule (Wispr Flow Floating Bar) */
+/* Floating HUD Capsule (Talkity Floating Bar) */
 .hud-capsule-container {
   display: flex;
   justify-content: center;

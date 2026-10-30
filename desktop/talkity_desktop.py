@@ -1,6 +1,6 @@
 """
 Talkity Native Desktop Injection Daemon (Windows)
-Reverse-Engineered from Wispr Flow architecture principles:
+Implements an independent Windows dictation pipeline:
 1. Native Windows Global Hotkey (F8 or Ctrl+Shift+Space) via RegisterHotKey
 2. Non-destructive Clipboard Injection via Win32 API
 3. Simulated Keystroke Injection (Ctrl+V) via keybd_event / SendInput
@@ -37,6 +37,10 @@ VK_V = 0x56
 KEYEVENTF_KEYUP = 0x0002
 
 SERVER_URL = "http://localhost:3000"
+
+# 🛡️ SECURITY (B1): deployment token supplied via the environment only.
+# It is never embedded in the client source.
+API_TOKEN = os.environ.get("TALKITY_API_TOKEN", "").strip()
 
 def play_beep(freq, duration_ms):
     """Play subtle acoustic sound chime."""
@@ -105,7 +109,7 @@ def simulate_paste():
 
 def inject_text_to_active_app(text):
     """
-    Wispr Flow injection sequence:
+    Talkity injection sequence:
     1. Read and stash old clipboard
     2. Write new text to clipboard
     3. Simulate Ctrl+V into focused window
@@ -167,10 +171,13 @@ def hotkey_listener_loop():
 
                         # Inform Talkity Web server
                         try:
+                            headers = {'Content-Type': 'application/json'}
+                            if API_TOKEN:
+                                headers['x-talkity-token'] = API_TOKEN
                             req = urllib.request.Request(
                                 f"{SERVER_URL}/api/inject",
                                 data=json.dumps({"text": "Hello from Talkity Voice Injection!"}).encode('utf-8'),
-                                headers={'Content-Type': 'application/json'}
+                                headers=headers
                             )
                         except Exception:
                             pass

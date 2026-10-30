@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
@@ -59,25 +60,101 @@ app.use((req, res, next) => {
   next();
 });
 
-// 3. Strict CORS Configuration
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
+// 3. Strict CORS Configuration (B3: explicit allowlist — no wildcards)
+// Production origins are always allowed. Local-development origins are only
+// allowed when the server is NOT running in production mode.
+const PRODUCTION_ORIGINS = [
+  'https://talkity-qifh.onrender.com',
   'https://talkity.vercel.app'
 ];
+const DEV_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || IS_VERCEL;
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, server-to-server) or matching allowed
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-      return callback(null, true);
-    }
+    if (!origin) return callback(null, true);
+    if (PRODUCTION_ORIGINS.includes(origin)) return callback(null, true);
+    if (!IS_PRODUCTION && DEV_ORIGINS.includes(origin)) return callback(null, true);
+    // Disallowed origins get no Access-Control-Allow-Origin header. CORS is
+    // defence-in-depth only; authentication below is the real gatekeeper.
     return callback(null, false);
   },
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-groq-key', 'x-openai-key', 'x-language'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-talkity-token', 'x-language'],
   credentials: false
 }));
+
+// 3b. Authentication (B1/B2): single shared deployment token, server-side only.
+// - REST: "Authorization: Bearer <token>" or "x-talkity-token: <token>"
+// - WS:   {"type":"auth","token":<t>} as the first frame, a "token" field inside
+//         the first register frame, or a "?token=" query parameter.
+// The token is configured via TALKITY_API_TOKEN and is NEVER embedded in
+// client-side JavaScript; users enter it in their client settings.
+// Development bypass: when no token is configured AND the request originates
+// from a loopback address AND the server is not in production mode.
+const API_TOKEN = (process.env.TALKITY_API_TOKEN || '').trim();
+logSafeEnvPresence('TALKITY_API_TOKEN', !!API_TOKEN);
+
+function timingSafeTokenMatch(supplied, expected) {
+  if (typeof supplied !== 'string' || typeof expected !== 'string') return false;
+  if (supplied.length === 0 || supplied.length > 256) return false;
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function extractRequestToken(req) {
+  const authz = req.headers['authorization'];
+  if (typeof authz === 'string') {
+    const m = authz.match(/^Bearer\s+(.+)$/i);
+    if (m && m[1]) return m[1].trim();
+  }
+  const t = req.headers['x-talkity-token'];
+  if (typeof t === 'string') return t.trim();
+  return '';
+}
+
+function isLoopbackAddress(address) {
+  const ip = typeof address === 'string' ? address : '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+
+function requireAuth(req, res, next) {
+  if (API_TOKEN) {
+    const supplied = extractRequestToken(req);
+    if (supplied && timingSafeTokenMatch(supplied, API_TOKEN)) return next();
+    return res.status(401).json({ error: 'Unauthorized. A valid Talkity API token is required.' });
+  }
+  if (!IS_PRODUCTION && isLoopbackAddress(req.socket && req.socket.remoteAddress)) return next();
+  if (IS_PRODUCTION) {
+    return res.status(503).json({ error: 'Server authentication is not configured (TALKITY_API_TOKEN missing).' });
+  }
+  return res.status(401).json({ error: 'Unauthorized. A valid Talkity API token is required.' });
+}
+
+// WebSocket token check. With a configured token, only exact (timing-safe)
+// matches authenticate. Without a token, no WebSocket connection can
+// authenticate via a frame; local development grants a loopback bypass at
+// connect time instead (see the connection handler).
+function verifyWsToken(token) {
+  if (API_TOKEN) return timingSafeTokenMatch(typeof token === 'string' ? token : '', API_TOKEN);
+  return false;
+}
+
+// 🛡️ SECURITY (B4): coerce client-supplied clientId values into a safe,
+// bounded representation — printable ASCII only, trimmed, max 64 characters.
+// Handles missing, non-string, and oversized/multi-line values safely and is
+// used consistently for logging, stored registration state, and broadcast
+// payloads. Legitimate clients (short ASCII ids) are unaffected.
+function sanitizeClientId(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const safe = value.replace(/[^\x20-\x7E]/g, '').trim().slice(0, 64);
+  return safe || fallback;
+}
 
 // 4. In-Memory IP Rate Limiter (Protects against DDoS, brute force & API abuse)
 const rateLimitMap = new Map();
@@ -160,8 +237,6 @@ let inMemoryDictionary = [
   { phrase: "ui automation", replacement: "UI Automation" }
 ];
 let inMemorySettings = {
-  groqApiKey: process.env.GROQ_API_KEY || '',
-  openaiApiKey: process.env.OPENAI_API_KEY || '',
   language: 'en-IN',
   autoCopy: true,
   soundChimes: true
@@ -185,18 +260,38 @@ function writeJSON(file, data) {
 if (!fs.existsSync(HISTORY_FILE)) writeJSON(HISTORY_FILE, []);
 if (!fs.existsSync(DICTIONARY_FILE)) writeJSON(DICTIONARY_FILE, inMemoryDictionary);
 
+// 🛡️ SECURITY (B2): scrub legacy client-supplied provider keys that older
+// versions may have persisted to settings.json. Only the legacy secret fields
+// are removed; every other saved setting is preserved untouched. The key
+// values are never logged, never served, and never reused. New settings.json
+// files written by this version never contain these fields.
+function scrubLegacySettingsKeys() {
+  try {
+    const disk = readJSON(SETTINGS_FILE, null);
+    if (disk && typeof disk === 'object' && !Array.isArray(disk) &&
+        (disk.groqApiKey !== undefined || disk.openaiApiKey !== undefined)) {
+      const clean = { ...disk };
+      delete clean.groqApiKey;
+      delete clean.openaiApiKey;
+      writeJSON(SETTINGS_FILE, clean);
+    }
+  } catch (e) {}
+}
+scrubLegacySettingsKeys();
+
 function getRawSettings() {
   const disk = readJSON(SETTINGS_FILE, null);
   if (disk) return disk;
   return inMemorySettings;
 }
 
-// 🛡️ SECURITY: Never expose plaintext API keys to clients via GET /settings
+// 🛡️ SECURITY (B2): Never expose plaintext API keys to clients via GET /settings.
+// Provider credentials are held server-side (environment variables) only.
 function getClientSafeSettings() {
   const s = getRawSettings();
   return {
-    hasGroqKey: Boolean(s.groqApiKey || process.env.GROQ_API_KEY),
-    hasOpenaiKey: Boolean(s.openaiApiKey || process.env.OPENAI_API_KEY),
+    hasGroqKey: Boolean(process.env.GROQ_API_KEY),
+    hasOpenaiKey: Boolean(process.env.OPENAI_API_KEY),
     language: typeof s.language === 'string' ? s.language.slice(0, 10) : 'en-IN',
     autoCopy: Boolean(s.autoCopy ?? true),
     soundChimes: Boolean(s.soundChimes ?? true)
@@ -210,12 +305,9 @@ function saveSettings(settings) {
     autoCopy: Boolean(settings.autoCopy ?? true),
     soundChimes: Boolean(settings.soundChimes ?? true)
   };
-  if (typeof settings.groqApiKey === 'string' && settings.groqApiKey.length <= 256) {
-    sanitized.groqApiKey = settings.groqApiKey.trim();
-  }
-  if (typeof settings.openaiApiKey === 'string' && settings.openaiApiKey.length <= 256) {
-    sanitized.openaiApiKey = settings.openaiApiKey.trim();
-  }
+  // 🛡️ SECURITY (B2): client-supplied provider API keys are never accepted,
+  // never persisted, and never override server-held credentials. Legacy
+  // fields sent by older clients are intentionally ignored here.
   inMemorySettings = { ...inMemorySettings, ...sanitized };
   writeJSON(SETTINGS_FILE, inMemorySettings);
 }
@@ -227,19 +319,22 @@ let desktopClient = null;
 // Heartbeat monitoring configuration
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 const HEARTBEAT_TIMEOUT = 35000; // 35 seconds (give 5s grace period)
+const WS_AUTH_WINDOW_MS = 6000; // unauthenticated WS connections must authenticate within this window
 
 if (!IS_VERCEL) {
   try {
     const { WebSocketServer } = require('ws');
-    const wss = new WebSocketServer({ server });
+    const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
 
-    wss.on('connection', (ws) => {
+    wss.on('connection', (ws, req) => {
       const clientMeta = {
         id: `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         connectedAt: new Date().toISOString(),
         lastHeartbeat: Date.now(),
         isDesktop: false,
-        isAlive: true
+        isExtension: false,
+        isAlive: true,
+        authenticated: false
       };
 
       clients.set(ws, clientMeta);
@@ -251,6 +346,32 @@ if (!IS_VERCEL) {
         clientId: clientMeta.id,
         serverTime: new Date().toISOString()
       }));
+
+      // 🛡️ SECURITY (B1): authenticate the connection.
+      // Sources, in order: loopback dev bypass (no token configured, local
+      // only), "?token=" query parameter (desktop-client compatibility), or
+      // an auth/register frame carrying the token.
+      let authDeadlineTimer = null;
+      if (!API_TOKEN) {
+        const loopback = req && req.socket ? isLoopbackAddress(req.socket.remoteAddress) : false;
+        if (loopback && !IS_PRODUCTION) clientMeta.authenticated = true;
+      } else {
+        try {
+          const reqUrl = new URL(req.url, 'http://talkity.local');
+          if (timingSafeTokenMatch(reqUrl.searchParams.get('token') || '', API_TOKEN)) {
+            clientMeta.authenticated = true;
+          }
+        } catch (e) {}
+      }
+      if (!clientMeta.authenticated) {
+        authDeadlineTimer = setTimeout(() => {
+          if (!clientMeta.authenticated) {
+            console.log(`[WebSocket] Closing unauthenticated connection: ${clientMeta.id}`);
+            try { ws.close(4001, 'unauthorized'); } catch (e) {}
+          }
+        }, WS_AUTH_WINDOW_MS);
+        if (typeof authDeadlineTimer.unref === 'function') authDeadlineTimer.unref();
+      }
 
       // Heartbeat ping
       ws.isAlive = true;
@@ -265,6 +386,40 @@ if (!IS_VERCEL) {
         try {
           if (typeof msg !== 'string' && !Buffer.isBuffer(msg)) return;
           const data = JSON.parse(msg.toString());
+
+          // 🛡️ SECURITY (B4): validate message shape before any processing.
+          if (!data || typeof data !== 'object' || Array.isArray(data) ||
+              typeof data.type !== 'string' || data.type.length === 0 || data.type.length > 32) {
+            try { ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' })); } catch (e) {}
+            return;
+          }
+
+          // 🛡️ SECURITY (B1): everything except keep-alives and the auth frame
+          // requires an authenticated connection. Invalid or missing tokens
+          // terminate the connection.
+          if (!clientMeta.authenticated) {
+            if (data.type === 'heartbeat') {
+              clientMeta.lastHeartbeat = Date.now();
+              ws.send(JSON.stringify({ type: 'heartbeat_ack', timestamp: Date.now() }));
+              return;
+            }
+            const candidateToken = typeof data.token === 'string' ? data.token : '';
+            if (data.type === 'auth' || data.type === 'register_desktop' || data.type === 'register_extension') {
+              if (verifyWsToken(candidateToken)) {
+                clientMeta.authenticated = true;
+                if (authDeadlineTimer) { clearTimeout(authDeadlineTimer); authDeadlineTimer = null; }
+                try { ws.send(JSON.stringify({ type: 'authenticated', ok: true })); } catch (e) {}
+                // Fall through so a register_* frame is handled below as well.
+              } else {
+                console.log(`[WebSocket] Rejected unauthorized frame from ${clientMeta.id}`);
+                try { ws.close(4001, 'unauthorized'); } catch (e) {}
+                return;
+              }
+            } else {
+              try { ws.close(4001, 'unauthorized'); } catch (e) {}
+              return;
+            }
+          }
 
           // Handle client heartbeat
           if (data.type === 'heartbeat') {
@@ -284,41 +439,58 @@ if (!IS_VERCEL) {
             return;
           }
 
-          // Desktop client registration
+          // Desktop client registration (clientId sanitized at the boundary)
           if (data.type === 'register_desktop') {
+            const safeClientId = sanitizeClientId(data.clientId, clientMeta.id);
             desktopClient = ws;
             if (clients.has(ws)) {
               clients.get(ws).isDesktop = true;
-              clients.get(ws).clientId = data.clientId || clientMeta.id;
+              clients.get(ws).clientId = safeClientId;
             }
-            console.log(`[WebSocket] Desktop client registered: ${data.clientId}`);
-            broadcast({ type: 'desktop_status', connected: true, clientId: data.clientId });
+            console.log(`[WebSocket] Desktop client registered: ${safeClientId}`);
+            broadcast({ type: 'desktop_status', connected: true, clientId: safeClientId });
             return;
           }
 
-          // Extension client registration
+          // Extension client registration (clientId sanitized at the boundary)
           if (data.type === 'register_extension') {
+            const safeClientId = sanitizeClientId(data.clientId, clientMeta.id);
             if (clients.has(ws)) {
               clients.get(ws).isExtension = true;
-              clients.get(ws).clientId = data.clientId || clientMeta.id;
+              clients.get(ws).clientId = safeClientId;
             }
-            console.log(`[WebSocket] Extension client registered: ${data.clientId}`);
+            console.log(`[WebSocket] Extension client registered: ${safeClientId}`);
             ws.send(JSON.stringify({ type: 'extension_registered', success: true }));
             return;
           }
 
-          // Broadcast to other clients
-          for (const [client, meta] of clients.entries()) {
-            if (client !== ws && client.readyState === 1) {
-              client.send(JSON.stringify(data));
+          // 🛡️ SECURITY (B4): only allow-listed message types are relayed to
+          // other authenticated clients. Unknown types are rejected instead of
+          // being blindly re-broadcast. inject_text is server-generated only:
+          // clients can never inject into other clients via the WebSocket.
+          if (data.type === 'transcription') {
+            const text = typeof data.text === 'string' ? data.text.slice(0, 5000) : '';
+            if (!text) {
+              try { ws.send(JSON.stringify({ type: 'error', message: 'Invalid transcription payload' })); } catch (e) {}
+              return;
             }
+            const relay = { type: 'transcription', text, tone: typeof data.tone === 'string' ? data.tone.slice(0, 32) : 'clean', timestamp: Date.now() };
+            for (const [client, meta] of clients.entries()) {
+              if (client !== ws && client.readyState === 1 && meta.authenticated) {
+                client.send(JSON.stringify(relay));
+              }
+            }
+            return;
           }
+
+          try { ws.send(JSON.stringify({ type: 'error', message: 'Unsupported message type' })); } catch (e) {}
         } catch (e) {
           console.error('[WebSocket] Message error:', e.message);
         }
       });
 
       ws.on('close', () => {
+        if (authDeadlineTimer) clearTimeout(authDeadlineTimer);
         const meta = clients.get(ws);
         clients.delete(ws);
 
@@ -379,7 +551,8 @@ function broadcast(event) {
   const payload = JSON.stringify(event);
   let sent = 0;
   for (const [client, meta] of clients.entries()) {
-    if (client.readyState === 1) {
+    // 🛡️ SECURITY (B4): events are only delivered to authenticated clients.
+    if (client.readyState === 1 && meta.authenticated) {
       try {
         client.send(payload);
         sent++;
@@ -635,11 +808,12 @@ api.post('/settings', (req, res) => {
   res.json({ success: true, settings: getClientSafeSettings() });
 });
 
-// POST /transcribe (Rate limited, size limited, validated)
+// POST /transcribe (Rate limited, size limited, validated; auth enforced via requireAuth)
 api.post('/transcribe', aiRateLimiter, async (req, res) => {
-  const rawSettings = getRawSettings();
-  const groqKey = (typeof req.headers['x-groq-key'] === 'string' ? req.headers['x-groq-key'].trim() : '') || rawSettings.groqApiKey || process.env.GROQ_API_KEY;
-  const openaiKey = (typeof req.headers['x-openai-key'] === 'string' ? req.headers['x-openai-key'].trim() : '') || rawSettings.openaiApiKey || process.env.OPENAI_API_KEY;
+  // 🛡️ SECURITY (B2): provider keys are held server-side only. Client-supplied
+  // key headers are no longer accepted.
+  const groqKey = process.env.GROQ_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
 
   const audioBuffer = req.body;
   if (!audioBuffer || !Buffer.isBuffer(audioBuffer) || audioBuffer.length < 500) {
@@ -744,8 +918,9 @@ api.post('/transcribe', aiRateLimiter, async (req, res) => {
 // POST /polish (Input validation, tone allowlist, length limits)
 api.post('/polish', aiRateLimiter, async (req, res) => {
   const { rawText, context = '', tone = 'clean', dictionary = [] } = req.body;
-  const rawSettings = getRawSettings();
-  const apiKey = (typeof req.headers['x-groq-key'] === 'string' ? req.headers['x-groq-key'].trim() : '') || rawSettings.groqApiKey || process.env.GROQ_API_KEY || (typeof req.headers['x-openai-key'] === 'string' ? req.headers['x-openai-key'].trim() : '') || rawSettings.openaiApiKey || process.env.OPENAI_API_KEY;
+  // 🛡️ SECURITY (B2): provider keys are held server-side only. Client-supplied
+  // key headers are no longer accepted. Groq takes precedence when configured.
+  const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
 
   if (!rawText || typeof rawText !== 'string') {
     return res.status(400).json({ error: 'Valid rawText string is required' });
@@ -764,7 +939,7 @@ api.post('/polish', aiRateLimiter, async (req, res) => {
 
   if (apiKey) {
     try {
-      const isGroq = !!((typeof req.headers['x-groq-key'] === 'string' && req.headers['x-groq-key'].trim()) || rawSettings.groqApiKey || process.env.GROQ_API_KEY);
+      const isGroq = Boolean(process.env.GROQ_API_KEY);
       const url = isGroq 
         ? 'https://api.groq.com/openai/v1/chat/completions'
         : 'https://api.openai.com/v1/chat/completions';
@@ -928,9 +1103,19 @@ api.get('/ws-status', (req, res) => {
   });
 });
 
-// Mount router on both /api and root
-app.use('/api', api);
-app.use(api);
+// Mount router on both /api and root — behind the authentication gate (B1).
+app.use('/api', requireAuth, api);
+app.use(requireAuth, api);
+
+// Web playground (formerly the root page) keeps its own URL
+app.get(['/app', '/playground'], (req, res) => {
+  const appPath = path.join(publicPath, 'app.html');
+  if (fs.existsSync(appPath)) {
+    res.sendFile(appPath);
+  } else {
+    res.redirect('/');
+  }
+});
 
 // Fallback: Serve index.html for root or non-API routes
 app.get('*', (req, res) => {

@@ -20,8 +20,7 @@
     dictionary: [],
     settings: {
       engine: 'webspeech',
-      groqKey: '',
-      openaiKey: '',
+      apiToken: '',
       autoCopy: true,
       soundChimes: true
     },
@@ -56,10 +55,7 @@
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const saveSettingsBtn = document.getElementById('saveSettingsBtn');
   const sttEngineSelect = document.getElementById('sttEngineSelect');
-  const groqApiKey = document.getElementById('groqApiKey');
-  const openaiApiKey = document.getElementById('openaiApiKey');
-  const groqKeyGroup = document.getElementById('groqKeyGroup');
-  const openaiKeyGroup = document.getElementById('openaiKeyGroup');
+  const apiTokenInput = document.getElementById('apiTokenInput');
   const autoCopyCheck = document.getElementById('autoCopyCheck');
   const soundChimesCheck = document.getElementById('soundChimesCheck');
   const daemonStatus = document.getElementById('daemonStatus');
@@ -89,19 +85,14 @@
     } catch {}
 
     sttEngineSelect.value = state.settings.engine;
-    groqApiKey.value = state.settings.groqKey;
-    openaiApiKey.value = state.settings.openaiKey;
+    apiTokenInput.value = state.settings.apiToken || '';
     autoCopyCheck.checked = state.settings.autoCopy;
     soundChimesCheck.checked = state.settings.soundChimes;
-
-    groqKeyGroup.style.display = state.settings.engine === 'groq' ? 'block' : 'none';
-    openaiKeyGroup.style.display = state.settings.engine === 'openai' ? 'block' : 'none';
   }
 
   function saveSettings() {
     state.settings.engine = sttEngineSelect.value;
-    state.settings.groqKey = groqApiKey.value.trim();
-    state.settings.openaiKey = openaiApiKey.value.trim();
+    state.settings.apiToken = apiTokenInput.value.trim();
     state.settings.autoCopy = autoCopyCheck.checked;
     state.settings.soundChimes = soundChimesCheck.checked;
 
@@ -160,6 +151,14 @@
         state.reconnectDelay = 1000; // Reset backoff on successful connect
         daemonStatus.querySelector('.status-dot').style.background = '#10b981';
         daemonStatus.querySelector('.status-label').textContent = 'Desktop Bridge Connected';
+        // 🛡️ SECURITY (B1): authenticate the WS connection when a token is
+        // configured. Local development (no token, loopback) is bypassed
+        // server-side.
+        if (state.settings.apiToken) {
+          try {
+            state.ws.send(JSON.stringify({ type: 'auth', token: state.settings.apiToken }));
+          } catch {}
+        }
       };
 
       state.ws.onmessage = (event) => {
@@ -449,14 +448,20 @@
     rawMeta.textContent = `${words} words · ${elapsed}s`;
   }
 
+  // 🛡️ SECURITY (B1): REST calls must carry the user-entered API token.
+  // The token lives in localStorage, never in shipped client JS.
+  function authHeaders(extra = {}) {
+    const h = { 'Content-Type': 'application/json', ...extra };
+    if (state.settings.apiToken) h['x-talkity-token'] = state.settings.apiToken;
+    return h;
+  }
+
   // Polish Pipeline
   async function processAndPolish(rawText, durationSec) {
     const reqStart = Date.now();
     polishLatencyBadge.textContent = 'Polishing...';
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (state.settings.groqKey) headers['x-groq-key'] = state.settings.groqKey;
-    if (state.settings.openaiKey) headers['x-openai-key'] = state.settings.openaiKey;
+    const headers = authHeaders();
 
     try {
       const res = await fetch('/api/polish', {
@@ -565,7 +570,7 @@
     try {
       const res = await fetch('/api/inject', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ text })
       });
       const data = await res.json();
@@ -578,7 +583,7 @@
   // Dictionary Management
   async function fetchDictionary() {
     try {
-      const res = await fetch('/api/dictionary');
+      const res = await fetch('/api/dictionary', { headers: authHeaders() });
       state.dictionary = await res.json();
       renderDictionaryTable();
     } catch {}
@@ -606,7 +611,7 @@
       delBtn.title = 'Delete rule';
       delBtn.textContent = '×';
       delBtn.addEventListener('click', async () => {
-        await fetch(`/api/dictionary/${index}`, { method: 'DELETE' });
+        await fetch(`/api/dictionary/${index}`, { method: 'DELETE', headers: authHeaders() });
         fetchDictionary();
       });
       tdAction.appendChild(delBtn);
@@ -621,7 +626,7 @@
   // History Management & Page Reset
   async function clearHistoryAndResetPage() {
     try {
-      await fetch('/api/history', { method: 'DELETE' });
+      await fetch('/api/history', { method: 'DELETE', headers: authHeaders() });
     } catch (e) {
       console.warn('History clear error on load:', e);
     }
@@ -672,7 +677,7 @@
 
   async function fetchHistory() {
     try {
-      const res = await fetch('/api/history');
+      const res = await fetch('/api/history', { headers: authHeaders() });
       const items = await res.json();
       renderHistoryTable(items);
     } catch {}
@@ -682,7 +687,7 @@
     try {
       await fetch('/api/history', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify(record)
       });
       fetchHistory();
@@ -831,7 +836,7 @@
       if (phrase && replacement) {
         await fetch('/api/dictionary', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: JSON.stringify({ phrase, replacement })
         });
         dictForm.reset();
@@ -861,10 +866,6 @@
     settingsBtn.addEventListener('click', () => settingsModal.classList.add('open'));
     closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('open'));
     saveSettingsBtn.addEventListener('click', saveSettings);
-    sttEngineSelect.addEventListener('change', () => {
-      groqKeyGroup.style.display = sttEngineSelect.value === 'groq' ? 'block' : 'none';
-      openaiKeyGroup.style.display = sttEngineSelect.value === 'openai' ? 'block' : 'none';
-    });
 
     // Keyboard Shortcuts: Spacebar to toggle when not focused on an input
     window.addEventListener('keydown', (e) => {
