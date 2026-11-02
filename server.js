@@ -307,6 +307,14 @@ if (!IS_VERCEL) {
             return;
           }
 
+          // Security: never relay client-originated injection frames. No shipped
+          // client sends this; until clients authenticate, only the server may
+          // initiate text injection.
+          if (data.type === 'inject_text' || data.type === 'inject') {
+            console.warn('[WebSocket] Dropped client-originated inject frame');
+            return;
+          }
+
           // Broadcast to other clients
           for (const [client, meta] of clients.entries()) {
             if (client !== ws && client.readyState === 1) {
@@ -967,10 +975,9 @@ api.post('/history', (req, res) => {
 
 // DELETE /history
 api.delete('/history', (req, res) => {
-  inMemoryHistory = [];
-  writeJSON(HISTORY_FILE, []);
-  broadcast({ type: 'history_cleared' });
-  res.json({ success: true, message: 'History cleared' });
+  return res.status(503).json({
+    error: 'History deletion is temporarily disabled pending client authentication.'
+  });
 });
 
 // GET /dictionary
@@ -1016,16 +1023,11 @@ api.delete('/dictionary/:index', (req, res) => {
   res.json({ success: true, dictionary: dict });
 });
 
-// POST /inject (Safe text limits)
+// POST /inject (disabled pending client authentication)
 api.post('/inject', (req, res) => {
-  const { text } = req.body;
-  if (!text || typeof text !== 'string') {
-    return res.status(400).json({ error: 'Valid text string is required' });
-  }
-
-  const safeText = text.slice(0, 5000);
-  broadcast({ type: 'inject_text', text: safeText });
-  res.json({ success: true, message: 'Injection dispatched to desktop daemon' });
+  return res.status(503).json({
+    error: 'Text injection is temporarily disabled pending client authentication.'
+  });
 });
 
 // GET /ws-status (WebSocket connection status)
