@@ -741,6 +741,116 @@ api.post('/transcribe', aiRateLimiter, async (req, res) => {
   });
 });
 
+// 🔓 Public demo: unauthenticated transcription endpoint with strict rate limiting.
+// No API token required, no provider key headers accepted. Only transcription
+// is available — no access to settings, history, dictionary, inject, or polish.
+// CORS already allows talkity.vercel.app via the global cors middleware.
+app.use('/api/demo/transcribe', rateLimiter(10, 60 * 1000), express.raw({ type: '*/*', limit: '10mb' }), async (req, res) => {
+  // Reuse the same transcription logic as /api/transcribe but skip auth.
+  // CORS headers are already set by the global cors middleware.
+  const groqKey = process.env.GROQ_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+
+  const audioBuffer = req.body;
+  if (!audioBuffer || !Buffer.isBuffer(audioBuffer) || audioBuffer.length < 500) {
+    return res.status(400).json({ error: 'No audio data received or recording was too short.' });
+  }
+
+  if (audioBuffer.length > 10 * 1024 * 1024) {
+    return res.status(413).json({ error: 'Audio payload too large (max 10MB).' });
+  }
+
+  // Shared per-request transcription context. The language is only sent when
+  // the client explicitly requests one; otherwise Whisper auto-detects.
+  const dict = readJSON(DICTIONARY_FILE, inMemoryDictionary);
+  const requestedLanguage = normalizeWhisperLanguage(req.headers['x-language']);
+  const audioSeconds = wavDurationSeconds(audioBuffer);
+  const vocabularyPrompt = audioSeconds >= 0.5 ? buildVocabularyPrompt(dict) : '';
+
+  // 1. Groq Whisper
+  if (groqKey) {
+    try {
+      const formData = new FormData();
+      formData.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');
+      formData.append('model', 'whisper-large-v3');
+      formData.append('temperature', '0');
+      formData.append('response_format', 'verbose_json');
+      if (requestedLanguage) formData.append('language', requestedLanguage);
+      if (vocabularyPrompt) formData.append('prompt', vocabularyPrompt);
+
+      const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqKey}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = (data.text || '').trim();
+        const formatted = ruleBasedPolish(rawText, 'clean', dict);
+        const normalized = formatTranscriptText(rawText, dict);
+        logWhisperMetadata('groq-whisper-large-v3', data, audioSeconds, Boolean(vocabularyPrompt));
+
+        return res.json({
+          text: rawText,
+          formattedText: formatted,
+          normalizedText: normalized,
+          language: typeof data.language === 'string' ? data.language : null,
+          provider: 'groq-whisper-large-v3'
+        });
+      }
+    } catch (err) {
+      console.error('Groq transcription error:', err.message);
+    }
+  }
+
+  // 2. OpenAI Whisper
+  if (openaiKey) {
+    try {
+      const formData = new FormData();
+      formData.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'audio.wav');
+      formData.append('model', 'whisper-1');
+      formData.append('temperature', '0');
+      formData.append('response_format', 'verbose_json');
+      if (requestedLanguage) formData.append('language', requestedLanguage);
+      if (vocabularyPrompt) formData.append('prompt', vocabularyPrompt);
+
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = (data.text || '').trim();
+        const formatted = ruleBasedPolish(rawText, 'clean', dict);
+        const normalized = formatTranscriptText(rawText, dict);
+        logWhisperMetadata('openai-whisper', data, audioSeconds, Boolean(vocabularyPrompt));
+
+        return res.json({
+          text: rawText,
+          formattedText: formatted,
+          normalizedText: normalized,
+          language: typeof data.language === 'string' ? data.language : null,
+          provider: 'openai-whisper'
+        });
+      }
+    } catch (err) {
+      console.error('OpenAI transcription error:', err.message);
+    }
+  }
+
+  return res.status(400).json({
+    error: 'No Whisper API key configured. Use browser Web Speech or add Groq API key in Settings.',
+    hint: 'Groq provides free Whisper requests with instant setup at console.groq.com'
+  });
+});
+
 // POST /polish (Input validation, tone allowlist, length limits)
 api.post('/polish', aiRateLimiter, async (req, res) => {
   const { rawText, context = '', tone = 'clean', dictionary = [] } = req.body;
