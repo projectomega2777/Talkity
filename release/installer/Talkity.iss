@@ -20,8 +20,8 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName        "Talkity"
-#define AppVersion     "1.1.0"
-#define AppVersionFull "1.1.0.0"
+#define AppVersion     "1.2.0"
+#define AppVersionFull "1.2.0.0"
 #define AppPublisher   "Talkity"
 #define AppExe         "Talkity.exe"
 #define AppUrl         "https://github.com/projectomega2777/talkity"

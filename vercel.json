@@ -3,15 +3,47 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "destination": "https://talkity-qifh.onrender.com/api/$1"
     },
     {
       "source": "/app",
-      "destination": "/app.html"
+      "destination": "/apps/website/app.html"
     },
     {
       "source": "/playground",
-      "destination": "/app.html"
+      "destination": "/apps/website/app.html"
+    },
+    {
+      "source": "/styles.css",
+      "destination": "/apps/website/styles.css"
+    },
+    {
+      "source": "/app.js",
+      "destination": "/apps/website/app.js"
+    },
+    {
+      "source": "/landing.css",
+      "destination": "/apps/website/landing.css"
+    },
+    {
+      "source": "/landing.js",
+      "destination": "/apps/website/landing.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/apps/website/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "microphone=(self), camera=(), geolocation=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" }
+      ]
     }
   ]
 }

@@ -1,26 +1,35 @@
 {
   "name": "talkity",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Talkity - The Context-Aware AI Voice Dictation App & Web Playground",
-  "main": "server.js",
+  "main": "services/backend/server.js",
   "scripts": {
-    "start": "node server.js",
-    "web": "node server.js",
-    "desktop": "python desktop/talkity_desktop.py",
-    "test": "node test.js",
-    "test:extension": "node test_extension.js",
-    "test:server": "node test_server_transcribe.js",
-    "test:security": "node test_security.js",
-    "test:all": "node test.js && node test_extension.js && node test_server_transcribe.js && node test_security.js",
-    "test:desktop": "py desktop/test_protocol.py"
+    "start": "node services/backend/server.js",
+    "web": "node services/backend/server.js",
+    "desktop": "python apps/desktop/talkity_desktop.py",
+    "test": "node tests/test.js",
+    "test:extension": "node apps/extension/tests/test_extension.js",
+    "test:server": "node services/backend/tests/test_server_transcribe.js",
+    "test:security": "node services/backend/tests/test_security.js",
+    "test:web": "node apps/website/tests/test_unavailable_controls.js",
+    "test:all": "node tests/test.js && node apps/extension/tests/test_extension.js && node services/backend/tests/test_server_transcribe.js && node services/backend/tests/test_security.js",
+    "test:desktop": "py apps/desktop/test_protocol.py"
   },
-  "keywords": ["voice", "dictation", "whisper", "speech-to-text", "ai", "transcription"],
+  "keywords": [
+    "voice",
+    "dictation",
+    "whisper",
+    "speech-to-text",
+    "ai",
+    "transcription"
+  ],
   "author": "Talkity Team",
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
+    "three": "^0.187.0",
     "ws": "^8.18.0"
   }
 }
