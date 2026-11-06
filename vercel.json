@@ -7,31 +7,11 @@
     },
     {
       "source": "/app",
-      "destination": "/apps/website/app.html"
+      "destination": "/app.html"
     },
     {
       "source": "/playground",
-      "destination": "/apps/website/app.html"
-    },
-    {
-      "source": "/styles.css",
-      "destination": "/apps/website/styles.css"
-    },
-    {
-      "source": "/app.js",
-      "destination": "/apps/website/app.js"
-    },
-    {
-      "source": "/landing.css",
-      "destination": "/apps/website/landing.css"
-    },
-    {
-      "source": "/landing.js",
-      "destination": "/apps/website/landing.js"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/apps/website/$1"
+      "destination": "/app.html"
     }
   ],
   "headers": [

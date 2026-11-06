@@ -218,7 +218,11 @@ app.use('/transcribe', express.raw({ type: '*/*', limit: '10mb' }));
 app.use(express.json({ limit: '100kb' }));
 
 // Static file serving
-const publicPath = path.join(__dirname, '..', '..', 'apps', 'website');
+const publicPath = [
+  path.join(__dirname, '..', '..', 'apps', 'website'),
+  path.join(__dirname, '..', '..', 'public'),
+  path.join(__dirname, '..', '..')
+].find(p => fs.existsSync(p)) || path.join(__dirname, '..', '..', 'apps', 'website');
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath, { dotfiles: 'ignore', index: 'index.html' }));
 }
