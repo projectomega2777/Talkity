@@ -1280,7 +1280,8 @@ app.use((err, req, res, next) => {
 });
 
 // Start listening only in standalone local mode (not in Vercel Serverless)
-if (!IS_VERCEL && require.main === module) {
+const isEntrypoint = require.main === module || (require.main && /server\.js$/i.test(require.main.filename));
+if (!IS_VERCEL && isEntrypoint) {
   server.listen(PORT, () => {
     console.log(`\n======================================================`);
     console.log(`🚀 Talkity Web Server running at: http://localhost:${PORT}`);
